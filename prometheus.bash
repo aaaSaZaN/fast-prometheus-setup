@@ -300,13 +300,16 @@ fi
 
 # Настройка Белого Списка (Whitelist): NetBird, Localhost, локальные подсети, SSH и домены
 ipset create $SET_WHITELIST_TMP hash:net family inet hashsize 1024 maxelem 65536 -exist
+# Диапазон 100.64.0.0/10 (CGNAT) покрывает адреса и NetBird, и Tailscale.
+# Комментарии внутри heredoc ставить нельзя: ipset restore разбирает строку
+# целиком как аргументы и падает с "Unknown argument: '#'".
 cat <<WL_EOF | ipset restore -!
 flush $SET_WHITELIST_TMP
 add $SET_WHITELIST_TMP 127.0.0.0/8 -exist
 add $SET_WHITELIST_TMP 10.0.0.0/8 -exist
 add $SET_WHITELIST_TMP 172.16.0.0/12 -exist
 add $SET_WHITELIST_TMP 192.168.0.0/16 -exist
-add $SET_WHITELIST_TMP 100.64.0.0/10 -exist  # CGNAT: покрывает и NetBird, и Tailscale
+add $SET_WHITELIST_TMP 100.64.0.0/10 -exist
 WL_EOF
 
 # Добавляем текущий IP подключения администратора по SSH в белый список
