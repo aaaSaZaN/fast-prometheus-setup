@@ -177,7 +177,13 @@ echo "------------------------------------------------------------------"
 # считает себя подключенным и отвечает "Already connected", не проходя
 # регистрацию заново. Ошибку игнорируем - клиент мог быть и не запущен.
 netbird down >/dev/null 2>&1 || true
-if ! netbird up --management-url "$NETBIRD_MGMT_URL" --setup-key "$NETBIRD_SETUP_KEY"; then
+# --disable-dns: иначе NetBird прописывает себя системным резолвером в
+# /etc/resolv.conf и сторожит файл. Если его резолвер не поднялся - а он не
+# поднимется, когда :53 уже занят (AdGuardHome, dnsmasq, Pi-hole) - DNS
+# ложится у всей машины, и следующий же apt-get зависает намертво.
+# Ценой отказа теряется разрешение имен вида peer.netbird.selfhosted;
+# по адресам 100.x пиры работают как обычно.
+if ! netbird up --management-url "$NETBIRD_MGMT_URL" --setup-key "$NETBIRD_SETUP_KEY" --disable-dns; then
     echo "⚠️  netbird up завершился с ошибкой. Проверьте ключ и доступность $NETBIRD_MGMT_URL."
     echo "    Установка продолжится, но метрики не пойдут, пока пир не подключится."
 fi
