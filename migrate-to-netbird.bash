@@ -188,6 +188,30 @@ else
     rm -f /etc/default/tailscaled
 
     systemctl daemon-reload 2>/dev/null || true
+
+    # Docker копирует /etc/resolv.conf хоста в контейнер один раз, при его
+    # создании, и дальше держит свою копию независимо. Контейнеры, поднятые
+    # при живом Tailscale, унесли с собой его MagicDNS (100.100.100.100).
+    # После удаления Tailscale этот адрес мертв: хост резолвит нормально, а
+    # внутри контейнера DNS отваливается целиком - снаружи выглядит как
+    # полностью здоровый сервис, который почему-то ничего не открывает.
+    # Лечится только перезапуском: он заставляет Docker пересобрать файл.
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        echo "   Проверяем DNS внутри контейнеров..."
+        for c in $(docker ps --format '{{.Names}}' 2>/dev/null); do
+            cns=$(timeout 5 docker exec "$c" cat /etc/resolv.conf 2>/dev/null | grep '^nameserver' | awk '{print $2}')
+            case "$cns" in
+                *100.100.100.100*|*fd7a:115c:a1e0::53*)
+                    echo "   ↻ $c держит мертвый Tailscale DNS — перезапускаем"
+                    if docker restart "$c" >/dev/null 2>&1; then
+                        echo "     готово"
+                    else
+                        echo "     ⚠️  не удалось, перезапустите вручную: docker restart $c"
+                    fi
+                    ;;
+            esac
+        done
+    fi
 fi
 
 echo ""
