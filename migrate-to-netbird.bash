@@ -196,6 +196,10 @@ echo "✅ Переезд завершен"
 echo "=================================================================="
 echo "NetBird:    $(netbird status 2>/dev/null | grep 'NetBird IP:' | head -1)"
 echo "Метрики:    $REMOTE_URL"
-echo "Tailscale:  $(command -v tailscale >/dev/null 2>&1 && echo 'ВСЁ ЕЩЁ УСТАНОВЛЕН (?)' || echo 'удален')"
+# Сбрасываем хэш команд: bash помнит пути с прошлых вызовов и после purge
+# продолжает находить уже удаленный /usr/bin/tailscale, из-за чего проверка
+# ложно сообщала, что пакет остался.
+hash -r 2>/dev/null || true
+echo "Tailscale:  $(command -v tailscale >/dev/null 2>&1 && echo 'ВСЁ ЕЩЁ УСТАНОВЛЕН — уберите вручную' || echo 'удален')"
 echo "Интерфейсы: $(ip -br link show 2>/dev/null | awk '{print $1}' | grep -E '^(wt0|tailscale0)' | tr '\n' ' ')"
 echo "=================================================================="
