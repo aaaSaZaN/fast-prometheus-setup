@@ -75,6 +75,54 @@ echo "Защита:       IPSUM Level 1 + СКИПА (CyberOK) / Сканеры 
 echo "=================================================================="
 echo ""
 
+# Ожидание освобождения блокировок apt/dpkg.
+# Вызывается ДО первого разрушительного шага: unattended-upgrades по умолчанию
+# работает на Ubuntu и держит lock, а из-за set -e падение установки пакетов
+# обрывало скрипт уже после сноса старого мониторинга.
+#
+# fuser (пакет psmisc) стоит не везде. Запасной вариант - `apt-get check`:
+# он берет тот же самый lock, поэтому дает точный ответ. Проверка по именам
+# процессов тут не годится: pgrep -f ловит и постоянно висящий
+# unattended-upgrade-shutdown --wait-for-signal (он lock не держит), и сам
+# себя, из-за чего ожидание срабатывало бы всегда и на всех.
+apt_is_busy() {
+    if command -v fuser >/dev/null 2>&1; then
+        local l
+        for l in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
+                 /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+            [ -e "$l" ] || continue
+            fuser "$l" >/dev/null 2>&1 && return 0
+        done
+        return 1
+    fi
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get check -qq >/dev/null 2>&1 && return 1
+        return 0
+    fi
+    # Не apt-система (dnf/yum/apk) - ждать нечего.
+    return 1
+}
+
+wait_for_apt() {
+    local waited=0
+    local max_wait=600
+    while apt_is_busy; do
+        if [ "$waited" -eq 0 ]; then
+            echo "⏳ Ожидание освобождения apt/dpkg. Обычно это unattended-upgrades."
+        fi
+        if [ "$waited" -ge "$max_wait" ]; then
+            echo "❌ apt/dpkg занят более ${max_wait}s. Проверьте: ps -ef | grep -E 'apt|dpkg'"
+            exit 1
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    [ "$waited" -gt 0 ] && echo "✅ apt/dpkg свободен (ждали ${waited}s)."
+    return 0
+}
+
+wait_for_apt
+
 # 1. Полная очистка
 echo "[1/8] 🧹 Полная очистка старых конфигов и служб мониторинга..."
 systemctl stop cadvisor nodeexporter vmagent firewall-blocklist 2>/dev/null || true
