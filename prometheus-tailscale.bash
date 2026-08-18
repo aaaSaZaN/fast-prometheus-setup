@@ -115,7 +115,13 @@ pkill -f node_exporter 2>/dev/null || true
 
 # 2. Установка Tailscale
 echo "[2/8] 🌐 Установка и запуск Tailscale..."
-curl -fsSL https://tailscale.com/install.sh | sh
+# Установщик отказывается работать поверх уже установленного клиента и
+# выходит с ненулевым кодом, что при set -e роняло бы весь скрипт.
+if command -v tailscale >/dev/null 2>&1; then
+    echo "Tailscale уже установлен, установку пропускаем."
+else
+    curl -fsSL https://tailscale.com/install.sh | sh
+fi
 echo "------------------------------------------------------------------"
 echo "ВНИМАНИЕ: Сейчас запустится 'tailscale up'."
 echo "Если сервер еще не в вашей сети, в терминале появится ссылка."

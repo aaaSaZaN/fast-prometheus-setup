@@ -139,11 +139,26 @@ pkill -f node_exporter 2>/dev/null || true
 
 # 2. Установка NetBird
 echo "[2/8] 🌐 Установка и подключение NetBird..."
-curl -fsSL https://pkgs.netbird.io/install.sh | sh
+# Официальный install.sh отказывается работать поверх уже установленного
+# NetBird и выходит с ненулевым кодом, что при set -e роняло весь скрипт.
+# Повторный запуск установки нам и не нужен - достаточно переподключиться.
+if command -v netbird >/dev/null 2>&1; then
+    echo "NetBird уже установлен ($(netbird version 2>/dev/null || echo 'версия неизвестна')), установку пропускаем."
+else
+    curl -fsSL https://pkgs.netbird.io/install.sh | sh
+fi
+
 echo "------------------------------------------------------------------"
 echo "Подключаемся к $NETBIRD_MGMT_URL по Setup Key..."
 echo "------------------------------------------------------------------"
-netbird up --management-url "$NETBIRD_MGMT_URL" --setup-key "$NETBIRD_SETUP_KEY" || true
+# down перед up: если пир был удален в панели или ключ сменился, клиент
+# считает себя подключенным и отвечает "Already connected", не проходя
+# регистрацию заново. Ошибку игнорируем - клиент мог быть и не запущен.
+netbird down >/dev/null 2>&1 || true
+if ! netbird up --management-url "$NETBIRD_MGMT_URL" --setup-key "$NETBIRD_SETUP_KEY"; then
+    echo "⚠️  netbird up завершился с ошибкой. Проверьте ключ и доступность $NETBIRD_MGMT_URL."
+    echo "    Установка продолжится, но метрики не пойдут, пока пир не подключится."
+fi
 
 # 3. Включение TCP BBR
 echo "[3/8] ⚡ Оптимизация сети (включение TCP BBR)..."
