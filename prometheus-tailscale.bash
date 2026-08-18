@@ -6,9 +6,31 @@ set -e
 # ==============================================================================
 
 # Проверка наличия прав root
+# Права root скрипт добирает сам, чтобы работать и от обычного пользователя.
+# Перезапуститься можно только когда скрипт лежит обычным файлом: при
+# `bash <(curl ...)` или `curl | bash` в $0 оказывается /dev/fd/N или "bash",
+# и перечитать себя оттуда нельзя - интерпретатор уже вычитал часть потока,
+# копия вышла бы обрезанной.
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ Пожалуйста, запустите скрипт с правами root (sudo)."
-  exit 1
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "❌ Нужны права root, а sudo не установлен. Запустите от root."
+        exit 1
+    fi
+    if [ -f "$0" ] && [ -r "$0" ]; then
+        echo "🔑 Нужны права root — перезапускаемся через sudo..."
+        exec sudo -- bash "$0" "$@"
+    fi
+    echo "❌ Нужны права root, а перезапустить себя из потока нельзя."
+    echo "   Запустите одним из способов:"
+    echo ""
+    echo "     curl -sSL https://raw.githubusercontent.com/aaaSaZaN/fast-prometheus-setup/refs/heads/main/prometheus-tailscale.bash | sudo bash"
+    echo ""
+    echo "     curl -sSL https://raw.githubusercontent.com/aaaSaZaN/fast-prometheus-setup/refs/heads/main/prometheus-tailscale.bash -o /tmp/s.bash && sudo bash /tmp/s.bash"
+    echo ""
+    echo "   А вот 'sudo bash <(curl ...)' не сработает: sudo закрывает"
+    echo "   лишние файловые дескрипторы, и подстановка /dev/fd/N исчезает"
+    echo "   до старта bash."
+    exit 1
 fi
 
 # Запрос названия инстанса
